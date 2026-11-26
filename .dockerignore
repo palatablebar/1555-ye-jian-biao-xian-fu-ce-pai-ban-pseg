@@ -1,0 +1,7 @@
+**/__pycache__
+.pytest_cache
+.venv
+.git
+.env
+.DS_Store
+latest-run.json

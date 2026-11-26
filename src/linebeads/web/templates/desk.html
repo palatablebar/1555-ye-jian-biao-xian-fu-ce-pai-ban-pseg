@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ display.title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+  <script defer src="{{ url_for('static', filename='visual.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='desk.js') }}"></script>
+</head>
+<body class="depots" data-endpoint="{{ display.endpoint }}">
+<a class="skip" href="#main">跳到当班处置</a>
+<div class="shell">
+  <aside class="rail" aria-label="工作环节">
+    <a class="mark" href="/" aria-label="重回 {{ display.title }}">{{ display.identity }}</a>
+    <div class="role">{{ display.role }}</div>
+    <nav aria-label="业务阶段">
+      {% for slug, label in modules %}
+      <button type="button" data-stage="{{ slug }}" aria-pressed="false">{{ label }}</button>
+      {% endfor %}
+    </nav>
+    <details class="source-menu">
+      <summary>数据批次</summary>
+      <label for="batch-file">导入 JSON 单据</label>
+      <input type="file" id="batch-file" accept="application/json,.json" aria-label="导入 JSON 单据">
+      <button type="button" class="ghost" id="restore" hidden>恢复样例</button>
+    </details>
+  </aside>
+  <div class="work">
+    <header class="masthead">
+      <div class="headline"><p class="location">{{ display.location }}</p><h1>{{ display.title }}</h1></div>
+      <div class="actions">
+        <span class="source-label" id="source-label">随附样例</span>
+
+        <button type="button" class="ghost" id="save" disabled>下载凭证</button>
+      </div>
+    </header>
+    <main id="main" class="work-area">
+      <form id="scenario" class="scenario">
+        <div class="scenario-label"><strong>{{ display.action }}</strong><span>{{ display.resource }}</span></div>
+        <label for="capacity">额度</label><input type="number" id="capacity" min="1" max="60" step="1" value="12" required>
+        <label for="mode" class="sr-only">派单策略</label>
+        <select id="mode"><option value="balanced">分区均衡</option><option value="focus">集中复核</option></select>
+        <button type="submit" id="apply" disabled>复算安排</button>
+      </form>
+      <dl class="kpis" id="kpis" aria-label="本班摘要"></dl>
+      <div class="desk-grid">
+<section class="panel presentation" aria-labelledby="visual-title">
+  <div class="panel-head"><h2 id="visual-title">{{ display.visual }}</h2><span class="measure-unit">{{ display.unit }}</span></div>
+  <div class="plot" id="plot"><p class="empty">正在读取本班单据</p></div>
+</section>
+<section class="panel queue" aria-labelledby="queue-title">
+  <div class="panel-head"><h2 id="queue-title">{{ display.queue }}</h2><output id="row-count" aria-live="polite"></output></div>
+  <div class="filters">
+    <label for="filter">查单</label><input type="search" id="filter" placeholder="单号、作业区、原因">
+    <label for="status-filter" class="sr-only">处置状态</label>
+    <select id="status-filter"><option value="">全部处置</option><option>已分派</option><option>候补</option><option>暂停</option><option>人工判读</option><option>观察</option></select>
+  </div>
+  <div id="work-rows" class="table-scroll"></div>
+</section>
+<section id="detail" class="panel inspector" aria-labelledby="detail-title">
+  <div class="panel-head"><h2 id="detail-title" tabindex="-1">作业证据</h2></div>
+  <p class="detail-note" id="detail-note"></p>
+  <div id="detail-content" class="table-scroll"></div>
+</section>
+      </div>
+    </main>
+    <footer class="statusbar" aria-label="运行状态">
+      <span id="status" role="status">正在载入</span><button id="retry" type="button" hidden>重试</button>
+      <span>凭证 <code id="stamp">—</code></span><a href="/api/linebeads/overview">样例接口</a>
+    </footer>
+  </div>
+</div>
+</body>
+</html>
