@@ -80,6 +80,12 @@ function renderMeasurements(card, row) {
         snapshot.append(node('dt',labels[key][0]),node('dd',row.unmeasured.includes(key) ? `未报，拟合补值 ${valueOf(value)} ${labels[key][1]}` : `${valueOf(value)} ${labels[key][1]}`));
     }
     card.append(node('h3','单据量测','inner-heading'),snapshot);
+    if (row.fills?.length) {
+        const review = node('h3',row.fill_review ? '缺测补值审查 · 保留实测转人工' : '缺测补值审查 · 可据补值派工','inner-heading');
+        const table = rowsTable(row.fills.map(fill => ({字段:labels[fill['缺测字段']]?.[0] ?? fill['缺测字段'],...fill})),
+            ['字段','补入值','补值依据','同区成熟记录','推出训练范围','审查结论']);
+        card.append(review,table);
+    }
     const operations = node('dl',undefined,'record-fields');
     for (const [name,value] of row.operations) operations.append(node('dt',name),node('dd',value));
     card.append(node('h3','作业量计算','inner-heading'),operations);
@@ -128,6 +134,15 @@ function showDetail() {
             if (ticket) inspect(ticket);
         }});
         card.append(plan);
+    }
+    if (panel.imputation_review?.length) {
+        const review = node('details',undefined,'rejected');
+        review.append(node('summary',panel.imputation_title ?? '缺测补值审查'));
+        showTables(review,panel.imputation_review,{linkKey:'单号',choose: record => {
+            const ticket = ledger.rows.find(item => item.key === record['单号']);
+            if (ticket) inspect(ticket);
+        }});
+        card.append(review);
     }
     showTables(card,panel.records);
     if (panel.errors.length > 0) {

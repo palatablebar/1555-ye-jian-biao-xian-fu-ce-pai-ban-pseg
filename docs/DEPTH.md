@@ -16,6 +16,7 @@ AI/ML · 传统ML · 中型
 | M6 | 季节分组 | 差异定位和外推审查 | `src/linebeads/seasonal_mix/service.py` | `tests/test_seasonal_mix.py` |
 | M7 | 复测工位 | 硬规则与额度分配 | `src/linebeads/retrocheck_slots/service.py` | `tests/test_retrocheck_slots.py` |
 | M8 | 标线留证 | 单据及额度证据 | `src/linebeads/marking_evidence/service.py` | `tests/test_marking_evidence.py` |
+| M9 | 缺测补值审查 | 同区覆盖与训练范围裁决 | `src/linebeads/reflection_factors/service.py` | `tests/test_imputation_review.py` |
 
 ## 深度登记
 
@@ -30,3 +31,7 @@ AI/ML · 传统ML · 中型
 | TRAP-44 | 校准样本不足 | 分派前转人工判读并保留原因 | `src/linebeads/night_accuracy/service.py` | `tests/test_night_accuracy.py::test_empty_calibration_requires_review` |
 | TRAP-53 | 单条推断与混批 | 复用冻结参数，各条估计完全一致 | `src/linebeads/bead_kernel/service.py` | `tests/test_bead_kernel.py::test_input_batch_invariance` |
 | TRAP-54 | 特征版本与模型不配对 | 拒绝继续推断并要求重拟合 | `src/linebeads/bead_kernel/service.py` | `tests/test_bead_kernel.py::test_mismatched_model_input_version_fails` |
+| TRAP-57 | 缺测补值同区覆盖不足 | 退用全班中位并转人工，保留原因 | `src/linebeads/reflection_factors/service.py` | `tests/test_imputation_review.py::test_thin_zone_coverage_falls_back_to_pooled_and_holds_for_review` |
+| TRAP-58 | 补值把特征推出训练范围 | 保留实测转人工，不据补值派工 | `src/linebeads/reflection_factors/service.py` | `tests/test_imputation_review.py::test_fill_that_pushes_a_feature_out_of_range_is_held` |
+| TRAP-59 | 训练与推理补值依据不一致 | 共用冻结依据，当班数据不回灌 | `src/linebeads/reflection_factors/service.py` | `tests/test_imputation_review.py::test_live_measurements_cannot_feed_back_into_the_frozen_fill_basis` |
+| TRAP-60 | 同一批重跑新增补值版本或签发结果 | 重跑沿用同一依据与凭证，结果一致 | `src/linebeads/marking_evidence/service.py` | `tests/test_imputation_review.py::test_same_batch_rerun_adds_no_fill_version_or_signing_result` |

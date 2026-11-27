@@ -16,3 +16,13 @@ docker compose exec -T app python -m linebeads.entry evaluate --input sample_dat
 ```
 
 在网页筛选单号、作业区或原因，点击结果中的单号查看完整字段与处置证据。下载 JSON 可检视结果、对照原始资料摘要和模型特征版本。
+
+## 缺测补值审查
+
+签发前先看第 8 环节的 `imputation_review`（标题给出“可据补值派工 / 保留实测转人工”计数）。每张缺测单列出补值依据、同区成熟记录与审查结论：
+
+- `可据补值派工`：采用同区成熟中位，补值未把特征推出训练范围，可正常参与派发。
+- `FILL_ZONE_COVERAGE_LOW`：同区成熟记录不足，退用全班中位，保留实测转人工。
+- `FILL_EXCEEDS_TRAINING_RANGE`：补值把特征推出训练范围，保留实测转人工。
+
+凭证中的 `fill_version` 与 `feature_stamp` 是同一批重跑应保持不变的依据版本；当班读数改录只改 `sample_hash` 与单据结果，不会回灌历史，也不会新增补值版本。若被裁决转人工的单据出现在已分派清单，`check_imputation_signing` 会拒绝签发。

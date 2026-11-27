@@ -41,7 +41,7 @@ def confidence_weight(estimate, cutoff):
     return bounded / (1 + bounded)
 
 
-def recommend(assessment, attention, policy):
+def recommend(assessment, attention, policy, fill_review=None):
     raw = assessment.raw
     data = measures(raw.input_values)
     estimate = assessment.estimate
@@ -54,6 +54,10 @@ def recommend(assessment, attention, policy):
         state = '暂停'
         reason = domain_codes[0].rule_id
         summary = domain_codes[0].meaning
+    elif fill_review and raw.key in fill_review:
+        state = '人工判读'
+        reason = fill_review[raw.key]
+        summary = '补值依据不足或把特征推出训练范围，保留实测转人工'
     elif raw.key in attention or assessment.uncertain:
         state = '人工判读'
         reason = 'OUT_OF_REFERENCE' if raw.key in attention else 'INSUFFICIENT_CALIBRATION'
@@ -70,8 +74,8 @@ def recommend(assessment, attention, policy):
                state, reason, summary, round(level, 5), tuple(item.rule_id for item in domain_codes))
 
 
-def allocate(assessments, attention, policy):
-    work = [WorkOrder(recommend(assessment, attention, policy), assessment) for assessment in assessments]
+def allocate(assessments, attention, policy, fill_review=None):
+    work = [WorkOrder(recommend(assessment, attention, policy, fill_review), assessment) for assessment in assessments]
     if len({item.job.key for item in work}) != len(work):
         raise ValueError('待处理单据编号重复')
     candidates = sorted((order for order in work if order.job.state == '候选'),
@@ -108,8 +112,8 @@ def allocate(assessments, attention, policy):
     return Plan(tuple(resolved), policy.capacity, remaining, tuple(sorted(used.items())))
 
 
-def plan_jobs(assessments, attention, capacity, mode='balanced'):
-    return allocate(assessments, frozenset(attention), Policy.select(capacity, mode))
+def plan_jobs(assessments, attention, capacity, mode='balanced', fill_review=None):
+    return allocate(assessments, frozenset(attention), Policy.select(capacity, mode), fill_review)
 
 
 def action_evidence(plan):

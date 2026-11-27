@@ -90,6 +90,54 @@ def sign_field_evidence(rows, allocation):
     return {'工位使用':spent, '执行业务单':document_control(rows)}
 
 
+def imputation_review(rows, allocation):
+    """Pre-signing review: split imputed live tickets by their fill-basis verdict.
+
+    Every missing-measurement ticket is listed with its frozen fill basis. The
+    verdict concerns the basis alone: a sound zone fill is ``可据补值派工`` and may
+    be dispatched; an unsafe basis keeps the real readings and goes to manual
+    review, so a low-reflectance segment cannot be hidden behind a plausible
+    imputed estimate. Non-fill reasons (calibration, distribution) stay in the
+    ordinary ``原因码`` column.
+    """
+    decisions = {job.key: (job.state, job.reason) for job in allocation.jobs}
+    for row in rows:
+        if row['key'] not in decisions:
+            raise ArithmeticError('补值审查单与签发方案不一致')
+    reviewed = []
+    dispatchable = 0
+    held = 0
+    for row in rows:
+        if not row['unmeasured']:
+            continue
+        state, reason = decisions[row['key']]
+        verdict = row['fill_review']
+        coverage = min((item.get('同区成熟记录', 0) for item in row['fills']), default=0)
+        basis = '、'.join(sorted({item['补值依据'] for item in row['fills']})) or '—'
+        record = {'单号': row['key'], '作业区': row['zone'], '缺测字段': '、'.join(row['unmeasured']),
+                  '补值依据': basis, '同区成熟记录': coverage,
+                  '处置': state, '原因码': reason,
+                  '审查结论': '保留实测转人工' if verdict else '可据补值派工',
+                  '说明': verdict or '同区覆盖充足，补值未推出训练范围'}
+        reviewed.append(record)
+        if verdict:
+            held += 1
+        else:
+            dispatchable += 1
+    return {'rows': reviewed, 'dispatchable': dispatchable, 'held': held}
+
+
+def check_imputation_signing(rows, allocation):
+    """Refuse to sign if a held imputation ticket was dispatched on its fill."""
+    review = imputation_review(rows, allocation)
+    held = {item['单号'] for item in review['rows'] if item['审查结论'] == '保留实测转人工'}
+    dispatched = {job.key for job in allocation.jobs if job.state == '已分派'}
+    leaked = held & dispatched
+    if leaked:
+        raise ArithmeticError(f'补值审查未通过却已派工 {sorted(leaked)}')
+    return review
+
+
 def intervention_summary(rows):
     actions = {}
     for record in rows:

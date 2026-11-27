@@ -62,17 +62,22 @@ def rows_for(plan, scored, vectors):
         else:
             driver = ' · '.join(f'{amount:+.2f}' for amount in point.contributions)
         interval = ('–' if job.lower is None else f'{job.lower:.2f}–{job.upper:.2f}')
+        vector = vectors[job.key]
         order.append({'key': job.key, 'zone': job.cohort, 'estimate': job.estimate, 'interval': interval,
                       'state': job.state, 'cost': job.cost, 'reason': job.reason, 'evidence': job.summary,
                       'drivers': driver, 'missing': len(point.missing), 'hits': list(job.rule_hits),
                       'measurements': dict(zip(('retro_cd', 'age_days', 'wet_pct', 'traffic_k', 'beads_g', 'surface_c'), point.input_values, strict=True)),
-                      'unmeasured': list(point.missing), 'operations': feature_service.business_factors(vectors[job.key])})
+                      'unmeasured': list(point.missing), 'fills': vector.fill_evidence(),
+                      'fill_review': vector.review_reason(),
+                      'operations': feature_service.business_factors(vector)})
     return order
 
 
-def comparison_rows(predictions):
+def comparison_rows(predictions, vectors):
     return [{'单号': point.key, '分组': point.cohort, '原始估计': round(point.score, 4),
-             '补值字段': len(point.missing), '偏离特征': '、'.join(point.excursions) or '—'}
+             '补值字段': len(point.missing), '补值依据': '、'.join(sorted({fill.basis_label for fill in vectors[point.key].fills})) or '实测完整',
+             '审查结论': vectors[point.key].review_reason() or '可据补值派工',
+             '偏离特征': '、'.join(point.excursions) or '—'}
             for point in predictions[:14]]
 
 
@@ -106,7 +111,9 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
     baseline = monitor_service.fit_baseline(features.train,apply_stamp)
     drift = monitor_service.scan_current(baseline,features.live,apply_stamp)
     checked_live=grader(scored)
-    allocation = dispatch_service.plan_jobs(checked_live,drift.domain,capacity,mode)
+    fill_review={point.key: point.review_reason() for point in features.live if point.fills}
+    fill_review={key: reason for key, reason in fill_review.items() if reason}
+    allocation = dispatch_service.plan_jobs(checked_live,drift.domain,capacity,mode,fill_review)
     closed = audit_service.close_batch(tuple(documents),intake,windows,allocation,apply_stamp,kernel.name,mode)
     performance = calibration_service.performance(evaluated)
     states = dict(closed.totals.states)
@@ -124,19 +131,23 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
     sector = calibration_service.sector_replay(evaluated, 25)
     operating_shift = monitor_service.shop_floor_shift(features.train, features.live)
     field_evidence = audit_service.sign_field_evidence(row_list, allocation)
+    imputation_review = audit_service.check_imputation_signing(row_list, allocation)
     features_glance = feature_service.feature_evidence(state) + feature_service.measure_review(features)
+    fill_basis = feature_service.fill_basis_evidence(state) + feature_service.fill_review_evidence(features)
     weight_rows = [{'量测': key, '取值': value} for key, value in kernel.evidence]
     ignored = [issue.evidence() for issue in intake.issues]
     details = [
         stage_at(0, f'接收 {intake.source_rows} 条，采用 {len(intake.entries)} 条', intake_service.preliminary_evidence(intake), ignored),
         stage_at(1, f'拟合 {len(windows.train)} 条，校准 {len(windows.calibration)} 条，回放 {len(windows.replay)} 条', cohort_service.window_evidence(windows) + cohort_service.readiness_evidence(windows, as_of)),
-        stage_at(2, '特征转换版本 ' + state.fingerprint, features_glance),
-        stage_at(3, kernel.name, weight_rows + model_service.inspection_rows(kernel, features) + comparison_rows(scored)),
+        stage_at(2, '特征转换版本 ' + state.fingerprint, features_glance + fill_basis),
+        stage_at(3, kernel.name, weight_rows + model_service.inspection_rows(kernel, features) + comparison_rows(scored, vectors)),
         stage_at(4, f'{fitted_calibration.method} · {performance.status} · {performance.count} 条回放实绩', calibration_service.calibration_evidence(performance) + [overtime] + sector),
         stage_at(5, f'{drift.status} · {len(drift.domain)} 张单据需外推判读', monitor_service.shift_evidence(drift, coverage) + operating_shift),
         stage_at(6, f'本班占用 {allocation.capacity-allocation.balance} / {allocation.capacity} 个工位单位', dispatch_service.action_evidence(allocation) + dispatch_service.operating_group(checked_live, allocation)),
         stage_at(7, f'处置凭证 {closed.stamp} · 额度守恒', audit_service.reconciliation_evidence(closed) + field_evidence['执行业务单']),
     ]
+    details[7]['imputation_review'] = imputation_review['rows']
+    details[7]['imputation_title'] = f"缺测补值审查 · 可据补值派工 {imputation_review['dispatchable']} / 保留实测转人工 {imputation_review['held']}"
     details[6]['operating_rows'] = operating_rows
     details[6]['operating_title'] = '标线干面对照单'
     points = [{'label': row['key'], 'value': row['estimate'], 'state': row['state'], 'zone': row['zone'],
@@ -154,7 +165,7 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
     details[7]['records'].extend(audit_service.intervention_summary(row_list))
     overview_report = {'capacity' : capacity, 'mode': mode, 'as_of': as_of, 'sample_hash': closed.batch_hash,
               'policy_hash': closed.policy_hash, 'feature_stamp': state.fingerprint,
-              'model': kernel.name, 'run_id': closed.stamp, 'object_name': DISPLAY['object_name'],
+              'fill_version': state.fill_version, 'model': kernel.name, 'run_id': closed.stamp, 'object_name': DISPLAY['object_name'],
               'unit': DISPLAY['unit'], 'sections': details, 'flow_counts': list(states.items()),
               'measures': {'retro_cd': ('当前反光系数', 'mcd'),
  'age_days': ('涂覆后天数', '天'),
